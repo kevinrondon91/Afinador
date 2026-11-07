@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Afinador de guitarra y cuatro</title>
+<style>
+:root{--bg:#f6f1e4;--fg:#1b2340;--mut:#5d6580;--card:#ffffff;--line:#d9d2bd;--ok:#1c8a4a;--bad:#c4262e;--acc:#e0a800;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101a3a;--fg:#f5efdc;--mut:#a3accb;--card:#18244d;--line:#2c3a6e;--ok:#4fd387;--bad:#ff6b6b;--acc:#fcd116;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101a3a;--fg:#f5efdc;--mut:#a3accb;--card:#18244d;--line:#2c3a6e;--ok:#4fd387;--bad:#ff6b6b;--acc:#fcd116;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:Georgia,"Times New Roman",serif}
+main{max-width:460px;margin:0 auto;padding:18px 16px 28px;text-align:center}
+h1{font-size:1.35rem;margin:4px 0 14px;font-weight:700}
+.tabs{display:flex;gap:8px;justify-content:center;margin-bottom:14px}
+.tabs button{flex:1;padding:12px;font:inherit;font-size:1rem;border:2px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px}
+.tabs button[aria-pressed="true"]{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc) inset;font-weight:700}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 12px 18px}
+#note{font-size:5.2rem;line-height:1;font-weight:700;min-height:1em;margin:6px 0 0;transition:color .2s}
+#hz{color:var(--mut);font-size:.95rem;min-height:1.3em}
+#msg{font-size:1.25rem;min-height:2.6em;margin:6px 0 0;font-weight:700}
+svg{width:100%;height:auto;display:block}
+.strings{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:16px 0 4px}
+.strings button{min-width:56px;padding:10px 12px;font:inherit;font-size:1.05rem;border:2px solid var(--line);border-radius:12px;background:var(--card);color:var(--fg)}
+.strings button.on{border-color:var(--acc);background:var(--acc);color:#1b2340;font-weight:700}
+.strings button.done{border-color:var(--ok)}
+#go{margin-top:12px;width:100%;padding:16px;font:inherit;font-size:1.15rem;font-weight:700;border:0;border-radius:14px;background:var(--acc);color:#1b2340}
+small{display:block;color:var(--mut);margin-top:12px;line-height:1.4}
+button:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<h1>Afinador de guitarra y cuatro</h1>
+<div class="tabs" role="group" aria-label="Instrumento">
+<button id="t-gui" aria-pressed="true">Guitarra</button>
+<button id="t-cua" aria-pressed="false">Cuatro</button>
+</div>
+<div class="panel">
+<svg viewBox="0 0 300 150" aria-hidden="true">
+<path d="M30 130 A120 120 0 0 1 270 130" fill="none" stroke="var(--line)" stroke-width="14" stroke-linecap="round"/>
+<path d="M138 18 A120 120 0 0 1 162 18" fill="none" stroke="var(--ok)" stroke-width="14"/>
+<line x1="150" y1="130" x2="150" y2="30" id="needle" stroke="var(--fg)" stroke-width="4" stroke-linecap="round" style="transform-origin:150px 130px;transition:transform .12s"/>
+<circle cx="150" cy="130" r="7" fill="var(--fg)"/>
+<text x="30" y="150" fill="var(--mut)" font-size="11" text-anchor="middle">baja</text>
+<text x="270" y="150" fill="var(--mut)" font-size="11" text-anchor="middle">alta</text>
+</svg>
+<div id="note">–</div>
+<div id="hz">Toca una cuerda</div>
+<div id="msg">Pulsa “Empezar” para activar el micrófono</div>
+</div>
+<div class="strings" id="strings" aria-label="Cuerdas"></div>
+<button id="go">Empezar</button>
+<small>Toca una cuerda suelta. Toca el botón de una nota para escuchar el sonido de referencia.</small>
+</main>
+<script>
+const SETS={
+gui:[["Mi",82.41,"E2"],["La",110,"A2"],["Re",146.83,"D3"],["Sol",196,"G3"],["Si",246.94,"B3"],["Mi",329.63,"E4"]],
+cua:[["Si",246.94,"B3"],["Re",293.66,"D4"],["Fa♯",369.99,"F♯4"],["La",440,"A4"]]};
+let inst="gui",ctx,an,buf,running=false,last=0,hist=[],hold=0,done={};
+const $=id=>document.getElementById(id);
+function drawStrings(){const box=$("strings");box.innerHTML="";
+SETS[inst].forEach((s,i)=>{const b=document.createElement("button");b.textContent=s[0]+(inst==="gui"?" "+s[2].slice(-1):"");b.dataset.i=i;b.setAttribute("aria-label","Sonido de referencia "+s[0]);
+b.className=done[inst+i]?"done":"";b.onclick=()=>tone(s[1]);box.appendChild(b)})}
+function setInst(k){inst=k;$("t-gui").setAttribute("aria-pressed",k==="gui");$("t-cua").setAttribute("aria-pressed",k==="cua");done={};drawStrings()}
+$("t-gui").onclick=()=>setInst("gui");$("t-cua").onclick=()=>setInst("cua");
+function tone(f){try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=f;g.gain.setValueAtTime(.0001,ctx.currentTime);g.gain.exponentialRampToValueAtTime(.3,ctx.currentTime+.05);g.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+2);o.connect(g).connect(ctx.destination);o.start();o.stop(ctx.currentTime+2.1)}catch(e){}}
+function yin(b,sr){const half=b.length>>1,maxT=Math.min(half-1,Math.floor(sr/70)),minT=Math.floor(sr/700),d=new Float32Array(maxT+1);
+for(let t=1;t<=maxT;t++){let s=0;for(let i=0;i<half;i++){const x=b[i]-b[i+t];s+=x*x}d[t]=s}
+let run=0;for(let t=1;t<=maxT;t++){run+=d[t];d[t]=d[t]*t/(run||1)}
+let t=minT;while(t<maxT){if(d[t]<0.12){while(t+1<maxT&&d[t+1]<d[t])t++;
+const a=d[t-1],b2=d[t],c=d[t+1],den=a-2*b2+c;const sh=den?0.5*(a-c)/den:0;return sr/(t+sh)}t++}return -1}
+function show(f){const set=SETS[inst];let bi=0,bc=1e9;
+set.forEach((s,i)=>{const c=1200*Math.log2(f/s[1]);if(Math.abs(c)<Math.abs(bc)){bc=c;bi=i}});
+const cents=Math.max(-50,Math.min(50,bc)),ok=Math.abs(bc)<=5;
+$("needle").style.transform="rotate("+(cents*0.9)+"deg)";
+$("note").textContent=set[bi][0];$("note").style.color=ok?"var(--ok)":Math.abs(bc)>25?"var(--bad)":"var(--fg)";
+$("hz").textContent=f.toFixed(1)+" Hz · "+(bc>0?"+":"")+Math.round(bc)+" cents";
+$("msg").textContent=ok?"¡Afinada!":bc<0?(Math.abs(bc)>25?"Muy baja, apriétala":"Un poquito baja, apriétala suave"):(Math.abs(bc)>25?"Muy alta, aflójala":"Un poquito alta, aflójala suave");
+$("msg").style.color=ok?"var(--ok)":"var(--fg)";
+document.querySelectorAll(".strings button").forEach((b,i)=>{b.classList.toggle("on",i===bi);if(ok&&i===bi){done[inst+i]=1;b.classList.add("done")}})}
+function loop(){if(!running)return;requestAnimationFrame(loop);const n=performance.now();if(n-last<60)return;last=n;
+an.getFloatTimeDomainData(buf);let r=0;for(let i=0;i<buf.length;i++)r+=buf[i]*buf[i];r=Math.sqrt(r/buf.length);
+if(r<0.008){if(n-hold>1500&&hist.length){hist=[];$("hz").textContent="Toca una cuerda"}return}
+const f=yin(buf,ctx.sampleRate);if(f<0)return;hist.push(f);if(hist.length>5)hist.shift();
+const m=[...hist].sort((a,b)=>a-b)[hist.length>>1];hold=n;show(m)}
+$("go").onclick=async()=>{
+if(running){running=false;$("go").textContent="Empezar";$("msg").textContent="Pausado";return}
+try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();await ctx.resume();
+const st=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+const src=ctx.createMediaStreamSource(st);an=ctx.createAnalyser();an.fftSize=4096;buf=new Float32Array(an.fftSize);src.connect(an);
+running=true;$("go").textContent="Parar";$("msg").textContent="Escuchando… toca una cuerda";loop()}
+catch(e){$("msg").textContent="No pude usar el micrófono. Permite el acceso y abre el enlace en Chrome o Safari.";$("msg").style.color="var(--bad)"}}
+drawStrings();
+</script>
+</body>
+</html>
